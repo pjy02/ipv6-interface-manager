@@ -176,12 +176,22 @@ verify_installation() {
         exit 1
     fi
     
-    # 检查脚本是否能正常运行（显示帮助信息）
-    if "$COMMAND_NAME" --help &> /dev/null; then
-        print_message $GREEN "✓ 安装验证成功"
+    # 检查符号链接是否正确
+    if [ -L "$SYMLINK_PATH" ] && [ "$(readlink "$SYMLINK_PATH")" = "$script_path" ]; then
+        print_message $GREEN "✓ 符号链接验证成功"
     else
-        print_message $YELLOW "警告: 脚本可能无法正常运行，但安装已完成"
+        print_message $RED "错误: 符号链接验证失败"
+        exit 1
     fi
+    
+    # 简单的脚本语法检查
+    if bash -n "$script_path" 2>/dev/null; then
+        print_message $GREEN "✓ 脚本语法验证成功"
+    else
+        print_message $YELLOW "警告: 脚本语法验证失败，但安装已完成"
+    fi
+    
+    print_message $GREEN "✓ 安装验证完成"
 }
 
 # 显示安装完成信息
