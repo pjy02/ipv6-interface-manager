@@ -4603,6 +4603,8 @@ batch_add_ipv6() {
             fi
         done
         
+        echo -e "${YELLOW}[调试] 成功添加的地址数量: ${#successful_addresses[@]}${NC}"
+        
         # 询问是否进行持久化配置
         if [[ ${#successful_addresses[@]} -gt 0 ]]; then
             echo
@@ -4628,7 +4630,11 @@ batch_add_ipv6() {
                         ;;
                 esac
             done
+        else
+            echo -e "${YELLOW}[调试] 没有找到成功添加的地址，跳过持久化选项${NC}"
         fi
+    else
+        echo -e "${YELLOW}[调试] success_count = $success_count，跳过持久化逻辑${NC}"
     fi
 }
 
