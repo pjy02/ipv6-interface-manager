@@ -4603,9 +4603,31 @@ batch_add_ipv6() {
             fi
         done
         
-        # 询问是否持久化配置
+        # 询问是否进行持久化配置
         if [[ ${#successful_addresses[@]} -gt 0 ]]; then
-            make_persistent "$SELECTED_INTERFACE" "${successful_addresses[@]}"
+            echo
+            echo -e "${CYAN}是否进行持久化配置？${NC}"
+            echo -e "${GREEN}y${NC} - 是，进行持久化配置"
+            echo -e "${GREEN}n${NC} - 否，仅临时配置"
+            echo
+            
+            local persist_choice
+            while true; do
+                read -p "请选择 (y/n): " persist_choice
+                case $persist_choice in
+                    [Yy]|[Yy][Ee][Ss])
+                        make_persistent "$SELECTED_INTERFACE" "${successful_addresses[@]}"
+                        break
+                        ;;
+                    [Nn]|[Nn][Oo])
+                        echo -e "${YELLOW}配置未持久化，重启后将丢失${NC}"
+                        break
+                        ;;
+                    *)
+                        echo -e "${RED}请输入 y 或 n${NC}"
+                        ;;
+                esac
+            done
         fi
     fi
 }
