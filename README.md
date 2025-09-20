@@ -27,16 +27,16 @@
 #### 快速安装
 ```bash
 # 下载并运行安装脚本
-curl -fsSL https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/refs/heads/main/install.sh | sudo bash
 
 # 或者使用wget
-wget -qO- https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/install.sh | sudo bash
+wget -qO- https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/refs/heads/main/install.sh | sudo bash
 ```
 
 #### 手动安装
 ```bash
 # 下载安装脚本
-wget https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/install.sh
+wget https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/refs/heads/main/install.sh
 chmod +x install.sh
 
 # 运行安装
