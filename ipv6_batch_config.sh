@@ -4603,38 +4603,43 @@ batch_add_ipv6() {
             fi
         done
         
-        echo -e "${YELLOW}[调试] 成功添加的地址数量: ${#successful_addresses[@]}${NC}"
-        
         # 询问是否进行持久化配置
-        if [[ ${#successful_addresses[@]} -gt 0 ]]; then
-            echo
-            echo -e "${CYAN}是否进行持久化配置？${NC}"
-            echo -e "${GREEN}y${NC} - 是，进行持久化配置"
-            echo -e "${GREEN}n${NC} - 否，仅临时配置"
-            echo
-            
-            local persist_choice
-            while true; do
-                read -p "请选择 (y/n): " persist_choice
-                case $persist_choice in
-                    [Yy]|[Yy][Ee][Ss])
+        echo
+        echo -e "${CYAN}是否进行持久化配置？${NC}"
+        echo -e "${GREEN}y${NC} - 是，进行持久化配置"
+        echo -e "${GREEN}n${NC} - 否，仅临时配置"
+        echo
+        
+        local persist_choice
+        while true; do
+            read -p "请选择 (y/n): " persist_choice
+            case $persist_choice in
+                [Yy]|[Yy][Ee][Ss])
+                    # 收集成功添加的地址用于持久化
+                    local successful_addresses=()
+                    for ipv6_addr in "${addresses[@]}"; do
+                        # 检查地址是否真的添加成功
+                        if ip -6 addr show "$SELECTED_INTERFACE" | grep -q "$ipv6_addr" 2>/dev/null; then
+                            successful_addresses+=("$ipv6_addr")
+                        fi
+                    done
+                    
+                    if [[ ${#successful_addresses[@]} -gt 0 ]]; then
                         make_persistent "$SELECTED_INTERFACE" "${successful_addresses[@]}"
-                        break
-                        ;;
-                    [Nn]|[Nn][Oo])
-                        echo -e "${YELLOW}配置未持久化，重启后将丢失${NC}"
-                        break
-                        ;;
-                    *)
-                        echo -e "${RED}请输入 y 或 n${NC}"
-                        ;;
-                esac
-            done
-        else
-            echo -e "${YELLOW}[调试] 没有找到成功添加的地址，跳过持久化选项${NC}"
-        fi
-    else
-        echo -e "${YELLOW}[调试] success_count = $success_count，跳过持久化逻辑${NC}"
+                    else
+                        echo -e "${YELLOW}没有找到成功添加的地址，无法进行持久化${NC}"
+                    fi
+                    break
+                    ;;
+                [Nn]|[Nn][Oo])
+                    echo -e "${YELLOW}配置未持久化，重启后将丢失${NC}"
+                    break
+                    ;;
+                *)
+                    echo -e "${RED}请输入 y 或 n${NC}"
+                    ;;
+            esac
+        done
     fi
 }
 
