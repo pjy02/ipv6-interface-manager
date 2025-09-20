@@ -4619,12 +4619,15 @@ batch_add_ipv6() {
                     # 收集成功添加的地址用于持久化
                     local successful_addresses=()
                     for ipv6_addr in "${addresses[@]}"; do
+                        # 提取地址部分（去掉子网掩码）
+                        local addr_only="${ipv6_addr%/*}"
                         # 检查地址是否真的添加成功
-                        if ip -6 addr show "$SELECTED_INTERFACE" | grep -q "$ipv6_addr" 2>/dev/null; then
+                        if ip -6 addr show "$SELECTED_INTERFACE" | grep -q "$addr_only" 2>/dev/null; then
                             successful_addresses+=("$ipv6_addr")
                             echo -e "${GREEN}✓${NC} 检测到地址: $ipv6_addr"
                         else
                             echo -e "${RED}✗${NC} 未检测到地址: $ipv6_addr"
+                            echo -e "${YELLOW}  调试: 搜索 $addr_only${NC}"
                         fi
                     done
                     
