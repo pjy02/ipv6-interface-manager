@@ -129,7 +129,7 @@ log_level=INFO
 
 [ipv6]
 # 默认IPv6前缀
-default_prefix=2602:f7c4:1:4f58
+default_prefix=2012:f2c4:1:1f34
 
 # 默认地址范围起始
 default_start=1
@@ -257,7 +257,7 @@ create_builtin_templates() {
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "range", "start": 1, "end": 5},
@@ -278,7 +278,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "single", "value": 80, "description": "HTTP"},
@@ -300,7 +300,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "single", "value": 25, "description": "SMTP"},
@@ -324,7 +324,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "range", "start": 100, "end": 110, "description": "测试地址池"},
@@ -344,7 +344,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "range", "start": 1, "end": 100, "description": "服务器池"},
@@ -2124,7 +2124,7 @@ log_level=INFO
 
 [ipv6]
 # 默认IPv6前缀
-default_prefix=2602:f7c4:1:4f58
+default_prefix=2012:f2c4:1:1f34
 
 # 默认地址范围起始
 default_start=1
@@ -2252,7 +2252,7 @@ create_builtin_templates() {
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "range", "start": 1, "end": 5},
@@ -2273,7 +2273,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "single", "value": 80, "description": "HTTP"},
@@ -2295,7 +2295,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "single", "value": 25, "description": "SMTP"},
@@ -2319,7 +2319,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "range", "start": 100, "end": 110, "description": "测试地址池"},
@@ -2339,7 +2339,7 @@ EOF
     "version": "1.0",
     "author": "CodeBuddy",
     "config": {
-        "prefix": "2602:f7c4:1:4f58",
+        "prefix": "2012:f2c4:1:1f34",
         "subnet_mask": 64,
         "addresses": [
             {"type": "range", "start": 1, "end": 100, "description": "服务器池"},
@@ -3054,7 +3054,7 @@ validate_ipv6_prefix() {
     # 检查IPv6前缀格式 (支持压缩格式)
     if [[ ! "$prefix" =~ ^([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}$ ]] && [[ ! "$prefix" =~ ^::([0-9a-fA-F]{0,4}:){0,6}[0-9a-fA-F]{0,4}$ ]] && [[ ! "$prefix" =~ ^([0-9a-fA-F]{0,4}:){1,6}:([0-9a-fA-F]{0,4}:){0,5}[0-9a-fA-F]{0,4}$ ]]; then
         echo -e "${RED}IPv6前缀格式不正确${NC}"
-        echo -e "${YELLOW}正确格式示例: 2602:f7c4:1:4f58 或 2001:db8::1${NC}"
+        echo -e "${YELLOW}正确格式示例: 2012:f2c4:1:1f34 或 2001:db8::1${NC}"
         return 1
     fi
     
@@ -4350,7 +4350,7 @@ batch_add_ipv6() {
     
     # 获取IPv6前缀
     echo -e "${BLUE}=== IPv6前缀配置 ===${NC}"
-    echo -e "${YELLOW}请输入IPv6前缀 (例如: 2602:f7c4:1:4f58)${NC}"
+    echo -e "${YELLOW}请输入IPv6前缀 (例如: 2012:f2c4:1:1f34)${NC}"
     echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
     
     local ipv6_prefix
@@ -4944,7 +4944,7 @@ wizard_home_server() {
     # 获取IPv6前缀
     echo -e "${WHITE}📝 步骤1: 配置IPv6网段前缀${NC}"
     echo -e "${CYAN}提示: 家庭服务器通常使用ISP分配的/64网段${NC}"
-    echo -e "${YELLOW}示例: 2602:f7c4:1:4f58${NC}"
+    echo -e "${YELLOW}示例: 2012:f2c4:1:1f34${NC}"
     echo
     
     local ipv6_prefix
@@ -5022,8 +5022,8 @@ wizard_test_environment() {
     if [[ $? -ne 0 ]]; then return 1; fi
     
     echo -e "${WHITE}📝 快速配置选项：${NC}"
-    echo -e "${GREEN}1.${NC} 🚀 快速测试 (2602:f7c4:1:4f58::1-3, 共3个地址)"
-    echo -e "${GREEN}2.${NC} 📊 压力测试 (2602:f7c4:1:4f58::1-100, 共100个地址)"
+    echo -e "${GREEN}1.${NC} 🚀 快速测试 (2012:f2c4:1:1f34::1-3, 共3个地址)"
+    echo -e "${GREEN}2.${NC} 📊 压力测试 (2012:f2c4:1:1f34::1-100, 共100个地址)"
     echo -e "${GREEN}3.${NC} 🔧 自定义测试配置"
     echo -e "${YELLOW}0.${NC} 返回上级菜单"
     echo
@@ -5041,12 +5041,12 @@ wizard_test_environment() {
     done
     
     case $test_choice in
-        1) wizard_preview_and_execute "2602:f7c4:1:4f58" "1" "3" "simple" ;;
+        1) wizard_preview_and_execute "2012:f2c4:1:1f34" "1" "3" "simple" ;;
         2) 
             echo -e "${YELLOW}⚠️  注意: 这将配置100个IPv6地址，可能需要几分钟时间${NC}"
             read -p "确认继续? (y/N): " confirm
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                wizard_preview_and_execute "2602:f7c4:1:4f58" "1" "100" "simple"
+                wizard_preview_and_execute "2012:f2c4:1:1f34" "1" "100" "simple"
             fi
             ;;
         3) wizard_custom_configuration ;;
@@ -6430,7 +6430,7 @@ wizard_template_selection() {
     echo
     local ipv6_prefix
     while true; do
-        read -p "请输入IPv6前缀 (例如: 2602:f7c4:1:4f58): " ipv6_prefix
+        read -p "请输入IPv6前缀 (例如: 2012:f2c4:1:1f34): " ipv6_prefix
         if validate_ipv6_prefix "$ipv6_prefix"; then
             break
         fi
