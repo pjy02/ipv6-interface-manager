@@ -4116,6 +4116,61 @@ get_network_interfaces() {
 }
 
 # 显示当前IPv6配置
+# 检查IPv6地址的持久化状态
+check_ipv6_persistence_status() {
+    local interface=$1
+    local addr=$2
+    
+    # 提取地址部分（去掉子网掩码）
+    local addr_only="${addr%/*}"
+    
+    # 检查netplan配置
+    if command -v netplan &> /dev/null && [[ -d /etc/netplan ]]; then
+        local netplan_files=($(find /etc/netplan -name "*.yaml" -o -name "*.yml" 2>/dev/null))
+        for file in "${netplan_files[@]}"; do
+            if [[ -f "$file" ]] && grep -q "$addr_only" "$file" 2>/dev/null; then
+                echo "netplan"
+                return 0
+            fi
+        done
+    fi
+    
+    # 检查interfaces文件
+    if [[ -f /etc/network/interfaces ]] && grep -q "$addr_only" /etc/network/interfaces 2>/dev/null; then
+        echo "interfaces"
+        return 0
+    fi
+    
+    # 检查启动脚本
+    if [[ -f /etc/rc.local ]] && grep -q "$addr_only" /etc/rc.local 2>/dev/null; then
+        echo "startup"
+        return 0
+    fi
+    
+    # 检查systemd服务
+    if systemctl list-unit-files | grep -q "ipv6-$interface.service" 2>/dev/null; then
+        local service_file="/etc/systemd/system/ipv6-$interface.service"
+        if [[ -f "$service_file" ]] && grep -q "$addr_only" "$service_file" 2>/dev/null; then
+            echo "systemd"
+            return 0
+        fi
+    fi
+    
+    # 检查NetworkManager配置
+    if command -v nmcli &> /dev/null; then
+        local nm_profiles=$(nmcli -t -f NAME connection show 2>/dev/null)
+        while IFS= read -r profile; do
+            if [[ -n "$profile" ]] && nmcli connection show "$profile" 2>/dev/null | grep -q "$addr_only"; then
+                echo "networkmanager"
+                return 0
+            fi
+        done <<< "$nm_profiles"
+    fi
+    
+    echo "none"
+    return 1
+}
+
 show_current_ipv6() {
     echo -e "${BLUE}=== 当前IPv6配置 ===${NC}"
     echo
@@ -4132,13 +4187,50 @@ show_current_ipv6() {
         
         if [[ -n "$ipv6_addrs" ]]; then
             while IFS= read -r addr; do
-                echo -e "  ${GREEN}✓${NC} $addr"
+                local persistence_status=$(check_ipv6_persistence_status "$interface" "$addr")
+                local status_icon=""
+                local status_text=""
+                
+                case "$persistence_status" in
+                    "netplan")
+                        status_icon="${BLUE}🔒${NC}"
+                        status_text="${BLUE}[netplan]${NC}"
+                        ;;
+                    "interfaces")
+                        status_icon="${BLUE}🔒${NC}"
+                        status_text="${BLUE}[interfaces]${NC}"
+                        ;;
+                    "startup")
+                        status_icon="${CYAN}📜${NC}"
+                        status_text="${CYAN}[startup]${NC}"
+                        ;;
+                    "systemd")
+                        status_icon="${PURPLE}⚙️${NC}"
+                        status_text="${PURPLE}[systemd]${NC}"
+                        ;;
+                    "networkmanager")
+                        status_icon="${BLUE}🔒${NC}"
+                        status_text="${BLUE}[nm]${NC}"
+                        ;;
+                    "none")
+                        status_icon="${YELLOW}⚠${NC}"
+                        status_text="${YELLOW}[临时]${NC}"
+                        ;;
+                esac
+                
+                echo -e "  ${GREEN}✓${NC} $addr $status_icon $status_text"
             done <<< "$ipv6_addrs"
         else
             echo -e "  ${YELLOW}无IPv6地址配置${NC}"
         fi
         echo
     done <<< "$interfaces"
+    
+    echo -e "${WHITE}持久化状态说明:${NC}"
+    echo -e "  ${BLUE}🔒 [netplan/interfaces/nm]${NC} - 网络配置文件持久化"
+    echo -e "  ${CYAN}📜 [startup]${NC} - 启动脚本持久化"
+    echo -e "  ${PURPLE}⚙️ [systemd]${NC} - systemd服务持久化"
+    echo -e "  ${YELLOW}⚠ [临时]${NC} - 未持久化，重启后丢失"
 }
 
 # 选择网络接口
