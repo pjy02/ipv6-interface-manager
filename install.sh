@@ -77,11 +77,17 @@ create_install_dir() {
     
     if [ -d "$INSTALL_DIR" ]; then
         print_message $YELLOW "警告: 安装目录已存在，将进行覆盖安装"
-        read -p "是否继续? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_message $YELLOW "安装已取消"
-            exit 0
+        
+        # 检查是否通过管道执行（非交互模式）
+        if [ ! -t 0 ]; then
+            print_message $CYAN "检测到非交互模式，自动继续安装..."
+        else
+            read -p "是否继续? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_message $YELLOW "安装已取消"
+                exit 0
+            fi
         fi
     fi
     
