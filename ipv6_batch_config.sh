@@ -6786,8 +6786,6 @@ show_main_menu() {
             2)
                 echo
                 batch_add_ipv6
-                echo
-                read -p "按回车键继续..."
                 ;;
             3)
                 echo
