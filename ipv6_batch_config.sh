@@ -4615,16 +4615,23 @@ batch_add_ipv6() {
             read -p "请选择 (y/n): " persist_choice
             case $persist_choice in
                 [Yy]|[Yy][Ee][Ss])
+                    echo -e "${CYAN}正在检测成功添加的地址...${NC}"
                     # 收集成功添加的地址用于持久化
                     local successful_addresses=()
                     for ipv6_addr in "${addresses[@]}"; do
                         # 检查地址是否真的添加成功
                         if ip -6 addr show "$SELECTED_INTERFACE" | grep -q "$ipv6_addr" 2>/dev/null; then
                             successful_addresses+=("$ipv6_addr")
+                            echo -e "${GREEN}✓${NC} 检测到地址: $ipv6_addr"
+                        else
+                            echo -e "${RED}✗${NC} 未检测到地址: $ipv6_addr"
                         fi
                     done
                     
+                    echo -e "${CYAN}检测到 ${#successful_addresses[@]} 个成功添加的地址${NC}"
+                    
                     if [[ ${#successful_addresses[@]} -gt 0 ]]; then
+                        echo -e "${CYAN}调用持久化配置...${NC}"
                         make_persistent "$SELECTED_INTERFACE" "${successful_addresses[@]}"
                     else
                         echo -e "${YELLOW}没有找到成功添加的地址，无法进行持久化${NC}"
