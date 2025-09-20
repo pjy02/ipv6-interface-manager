@@ -22,21 +22,61 @@
 
 ## 安装和使用
 
-### 1. 下载脚本
+### 方法一：使用安装脚本（推荐）
 
+#### 快速安装
 ```bash
-# 克隆或下载脚本文件
-wget https://your-repo/ipv6_batch_config.sh
-# 或者直接复制脚本内容到文件中
+# 下载并运行安装脚本
+curl -fsSL https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/install.sh | sudo bash
+
+# 或者使用wget
+wget -qO- https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/install.sh | sudo bash
 ```
 
-### 2. 设置执行权限
+#### 手动安装
+```bash
+# 下载安装脚本
+wget https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/install.sh
+chmod +x install.sh
+
+# 运行安装
+sudo ./install.sh
+```
+
+#### 安装后使用
+```bash
+# 使用快捷命令运行（推荐）
+sudo iim
+
+# 显示帮助信息
+sudo iim --help
+
+# 启动向导模式
+sudo iim --wizard
+```
+
+#### 卸载
+```bash
+# 下载安装脚本后运行卸载
+sudo ./install.sh uninstall
+```
+
+### 方法二：手动下载运行
+
+#### 1. 下载脚本
+
+```bash
+# 从GitHub下载脚本文件
+wget https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/main/ipv6_batch_config.sh
+```
+
+#### 2. 设置执行权限
 
 ```bash
 chmod +x ipv6_batch_config.sh
 ```
 
-### 3. 运行脚本
+#### 3. 运行脚本
 
 ```bash
 sudo ./ipv6_batch_config.sh
