@@ -25,11 +25,14 @@
 ### 方法一：使用安装脚本（推荐）
 
 #### 快速安装
-```bash
-# 下载并运行安装脚本
-curl -fsSL https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/refs/heads/main/install.sh | sudo bash
 
-# 或者使用wget
+**使用 curl:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/refs/heads/main/install.sh | sudo bash
+```
+
+**使用 wget:**
+```bash
 wget -qO- https://raw.githubusercontent.com/pjy02/ipv6-interface-manager/refs/heads/main/install.sh | sudo bash
 ```
 
