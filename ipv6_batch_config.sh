@@ -4120,16 +4120,23 @@ get_ipv6_prefixes() {
     local interface=$1
     local prefixes=()
     
-    # 从全局IPv6地址中提取前缀
-    local addrs=$(ip -6 addr show "$interface" 2>/dev/null | grep "inet6.*scope global" | awk '{print $2}')
+    # 通过 'ip -6 route' 直接从路由表获取前缀，这种方法更准确，不受前缀长度限制
+    # 过滤掉本地链接(fe80), 组播(ff00), 回环(::1), /128主机路由 和 默认路由(::/0)
+    local routes=$(ip -6 route show dev "$interface" 2>/dev/null | grep -v -E "^fe80|^ff00|^::1" | awk '{print $1}')
     
-    for addr in $addrs; do
-        # 提取/64网段的前缀 (前4段)
-        local p=$(echo "$addr" | cut -d'/' -f1 | cut -d':' -f1-4)
-        
-        # 验证前缀格式并确保唯一性
-        if [[ -n "$p" ]] && [[ "$p" =~ :.*:.*: ]] && ! [[ " ${prefixes[@]} " =~ " ${p} " ]]; then
-            prefixes+=("$p")
+    for route in $routes; do
+        # 排除 /128 主机路由和默认路由
+        if [[ "$route" != *"/128" && "$route" != "::/0" ]]; then
+            # 移除CIDR后缀, e.g., /64
+            local p=$(echo "$route" | cut -d'/' -f1)
+            
+            # 移除末尾的 '::' 以得到干净的前缀, e.g., '2001:db8:1::' -> '2001:db8:1'
+            p=${p%::}
+
+            # 确保前缀不为空且唯一
+            if [[ -n "$p" ]] && ! [[ " ${prefixes[@]} " =~ " ${p} " ]]; then
+                prefixes+=("$p")
+            fi
         fi
     done
     
