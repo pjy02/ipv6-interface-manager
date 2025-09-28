@@ -3045,10 +3045,11 @@ detect_ipv6_prefixes() {
     local detected_prefixes=()
     
     # 获取所有网络接口的IPv6地址
-    local ipv6_addresses=$(ip -6 addr show | grep -E "inet6.*scope global" | awk '{print $2}' | cut -d'/' -f1)
+    local ipv6_addresses=$(ip -6 addr show 2>/dev/null | grep -E "inet6.*scope global" | awk '{print $2}' | cut -d'/' -f1)
     
+    # 如果没有检测到IPv6地址，返回空数组
     if [[ -z "$ipv6_addresses" ]]; then
-        return 1
+        return 0
     fi
     
     # 分析每个IPv6地址，提取可能的前缀
@@ -3059,7 +3060,7 @@ detect_ipv6_prefixes() {
                 continue
             fi
             
-            # 提取前缀（取前4段作为常见的前缀长度）
+            # 提取前缀（取前4段、3段、2段作为常见的前缀长度）
             local prefix_4=$(echo "$addr" | cut -d':' -f1-4)
             local prefix_3=$(echo "$addr" | cut -d':' -f1-3)
             local prefix_2=$(echo "$addr" | cut -d':' -f1-2)
@@ -3118,9 +3119,21 @@ select_ipv6_prefix() {
     
     echo -e "${BLUE}=== IPv6前缀配置 ===${NC}"
     echo -e "${CYAN}正在检测系统中已配置的IPv6地址...${NC}"
+    echo
     
     # 检测现有的IPv6前缀
-    local detected_prefixes=($(detect_ipv6_prefixes))
+    local detected_prefixes_output
+    detected_prefixes_output=$(detect_ipv6_prefixes)
+    local detected_prefixes=()
+    
+    # 将检测结果转换为数组
+    if [[ -n "$detected_prefixes_output" ]]; then
+        while IFS= read -r line; do
+            if [[ -n "$line" ]]; then
+                detected_prefixes+=("$line")
+            fi
+        done <<< "$detected_prefixes_output"
+    fi
     
     if [[ ${#detected_prefixes[@]} -gt 0 ]]; then
         echo -e "${GREEN}检测到以下可能的IPv6前缀:${NC}"
@@ -3145,6 +3158,7 @@ select_ipv6_prefix() {
                     break
                 else
                     # 手动输入
+                    echo
                     echo -e "${YELLOW}请输入IPv6前缀 (例如: 2012:f2c4:1:1f34)${NC}"
                     echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
                     while true; do
@@ -3163,6 +3177,7 @@ select_ipv6_prefix() {
     else
         # 没有检测到前缀，直接手动输入
         echo -e "${YELLOW}未检测到已配置的IPv6地址，请手动输入前缀${NC}"
+        echo
         echo -e "${YELLOW}请输入IPv6前缀 (例如: 2012:f2c4:1:1f34)${NC}"
         echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
         
