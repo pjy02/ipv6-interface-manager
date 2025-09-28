@@ -3038,6 +3038,102 @@ check_dependencies() {
     fi
 }
 
+# 自动识别IPv6前缀
+auto_detect_ipv6_prefix() {
+    local interface=$1
+    local detected_prefixes=()
+    
+    # 方法1: 从现有IPv6地址中提取前缀
+    echo -e "${CYAN}  → 检查现有IPv6地址...${NC}"
+    local existing_ipv6s=$(ip -6 addr show "$interface" 2>/dev/null | grep -E "inet6.*scope global" | awk '{print $2}' | cut -d'/' -f1)
+    
+    if [[ -n "$existing_ipv6s" ]]; then
+        while IFS= read -r ipv6_addr; do
+            if [[ -n "$ipv6_addr" ]]; then
+                # 提取前4段作为前缀
+                local prefix=$(echo "$ipv6_addr" | cut -d':' -f1-4)
+                if [[ -n "$prefix" && "$prefix" != "$ipv6_addr" ]]; then
+                    detected_prefixes+=("$prefix")
+                fi
+            fi
+        done <<< "$existing_ipv6s"
+    fi
+    
+    # 方法2: 从路由表中获取前缀信息
+    echo -e "${CYAN}  → 检查IPv6路由表...${NC}"
+    local route_prefixes=$(ip -6 route show dev "$interface" 2>/dev/null | grep -E "^[0-9a-f:]+" | awk '{print $1}' | grep -E "^[0-9a-f:]+::/[0-9]+$" | cut -d'/' -f1)
+    
+    if [[ -n "$route_prefixes" ]]; then
+        while IFS= read -r route_prefix; do
+            if [[ -n "$route_prefix" ]]; then
+                # 提取前4段作为前缀
+                local prefix=$(echo "$route_prefix" | cut -d':' -f1-4)
+                if [[ -n "$prefix" && "$prefix" != "$route_prefix" ]]; then
+                    detected_prefixes+=("$prefix")
+                fi
+            fi
+        done <<< "$route_prefixes"
+    fi
+    
+    # 方法3: 从邻居发现协议获取前缀
+    echo -e "${CYAN}  → 检查路由器通告...${NC}"
+    local ra_prefixes=$(ip -6 route show | grep -E "^[0-9a-f:]+::/64.*proto ra" | awk '{print $1}' | cut -d'/' -f1)
+    
+    if [[ -n "$ra_prefixes" ]]; then
+        while IFS= read -r ra_prefix; do
+            if [[ -n "$ra_prefix" ]]; then
+                # 提取前4段作为前缀
+                local prefix=$(echo "$ra_prefix" | cut -d':' -f1-4)
+                if [[ -n "$prefix" && "$prefix" != "$ra_prefix" ]]; then
+                    detected_prefixes+=("$prefix")
+                fi
+            fi
+        done <<< "$ra_prefixes"
+    fi
+    
+    # 去重并选择最佳前缀
+    if [[ ${#detected_prefixes[@]} -gt 0 ]]; then
+        # 去重
+        local unique_prefixes=($(printf '%s
+' "${detected_prefixes[@]}" | sort -u))
+        
+        if [[ ${#unique_prefixes[@]} -eq 1 ]]; then
+            # 只有一个前缀，直接返回
+            echo "${unique_prefixes[0]}"
+            return 0
+        elif [[ ${#unique_prefixes[@]} -gt 1 ]]; then
+            # 多个前缀，让用户选择
+            echo
+            echo -e "${YELLOW}检测到多个可能的IPv6前缀:${NC}"
+            for i in "${!unique_prefixes[@]}"; do
+                echo -e "${GREEN}$((i+1)).${NC} ${unique_prefixes[i]}"
+            done
+            echo -e "${GREEN}$((${#unique_prefixes[@]}+1)).${NC} 手动输入其他前缀"
+            echo
+            
+            local choice
+            while true; do
+                read -p "请选择要使用的前缀 (1-$((${#unique_prefixes[@]}+1))): " choice
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le $((${#unique_prefixes[@]}+1)) ]]; then
+                    if [[ "$choice" -le ${#unique_prefixes[@]} ]]; then
+                        echo "${unique_prefixes[$((choice-1))]}"
+                        return 0
+                    else
+                        # 用户选择手动输入
+                        return 1
+                    fi
+                else
+                    echo -e "${RED}请输入有效的选项 (1-$((${#unique_prefixes[@]}+1)))${NC}"
+                fi
+            done
+        fi
+    fi
+    
+    # 没有检测到前缀
+    echo -e "${YELLOW}  ⚠ 未能自动检测到IPv6前缀${NC}"
+    return 1
+}
+
 # 验证IPv6前缀格式
 validate_ipv6_prefix() {
     local prefix=$1
@@ -4397,17 +4493,68 @@ batch_add_ipv6() {
     
     # 获取IPv6前缀
     echo -e "${BLUE}=== IPv6前缀配置 ===${NC}"
-    echo -e "${YELLOW}请输入IPv6前缀 (例如: 2012:f2c4:1:1f34)${NC}"
-    echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
+    echo -e "${CYAN}您可以选择自动识别或手动输入IPv6前缀${NC}"
+    echo
+    echo -e "${GREEN}1.${NC} 🔍 自动识别IPv6前缀 (推荐)"
+    echo -e "${GREEN}2.${NC} ✏️  手动输入IPv6前缀"
+    echo
+    
+    local prefix_choice
+    while true; do
+        read -p "请选择前缀配置方式 (1-2): " prefix_choice
+        if [[ "$prefix_choice" =~ ^[1-2]$ ]]; then
+            break
+        else
+            echo -e "${RED}请输入 1 或 2${NC}"
+        fi
+    done
     
     local ipv6_prefix
-    while true; do
-        read -p "IPv6前缀: " ipv6_prefix
-        if validate_ipv6_prefix "$ipv6_prefix"; then
-            break
+    if [[ "$prefix_choice" == "1" ]]; then
+        # 自动识别IPv6前缀
+        echo
+        echo -e "${CYAN}正在自动识别IPv6前缀...${NC}"
+        ipv6_prefix=$(auto_detect_ipv6_prefix "$SELECTED_INTERFACE")
+        
+        if [[ -n "$ipv6_prefix" ]]; then
+            echo -e "${GREEN}✓${NC} 自动识别到IPv6前缀: ${GREEN}$ipv6_prefix${NC}"
+            echo
+            read -p "是否使用此前缀? (Y/n): " use_detected
+            if [[ "$use_detected" =~ ^[Nn]$ ]]; then
+                echo -e "${YELLOW}请手动输入IPv6前缀${NC}"
+                while true; do
+                    read -p "IPv6前缀: " ipv6_prefix
+                    if validate_ipv6_prefix "$ipv6_prefix"; then
+                        break
+                    fi
+                    echo -e "${YELLOW}请重新输入正确的IPv6前缀${NC}"
+                done
+            fi
+        else
+            echo -e "${YELLOW}⚠${NC} 无法自动识别IPv6前缀，请手动输入"
+            echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
+            while true; do
+                read -p "IPv6前缀: " ipv6_prefix
+                if validate_ipv6_prefix "$ipv6_prefix"; then
+                    break
+                fi
+                echo -e "${YELLOW}请重新输入正确的IPv6前缀${NC}"
+            done
         fi
-        echo -e "${YELLOW}请重新输入正确的IPv6前缀${NC}"
-    done
+    else
+        # 手动输入IPv6前缀
+        echo
+        echo -e "${YELLOW}请输入IPv6前缀 (例如: 2012:f2c4:1:1f34)${NC}"
+        echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
+        
+        while true; do
+            read -p "IPv6前缀: " ipv6_prefix
+            if validate_ipv6_prefix "$ipv6_prefix"; then
+                break
+            fi
+            echo -e "${YELLOW}请重新输入正确的IPv6前缀${NC}"
+        done
+    fi
     
     # 计算已有的段数
     local prefix_segments=$(echo "$ipv6_prefix" | tr ':' '\n' | wc -l)
