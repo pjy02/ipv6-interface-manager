@@ -3077,6 +3077,7 @@ auto_detect_ipv6_prefix() {
     
     # 方法3: 从邻居发现协议获取前缀
     echo -e "${CYAN}  → 检查路由器通告...${NC}"
+    
     local ra_prefixes=$(ip -6 route show | grep -E "^[0-9a-f:]+::/64.*proto ra" | awk '{print $1}' | cut -d'/' -f1)
     
     if [[ -n "$ra_prefixes" ]]; then
@@ -3130,7 +3131,6 @@ auto_detect_ipv6_prefix() {
     fi
     
     # 没有检测到前缀
-    echo -e "${YELLOW}  ⚠ 未能自动检测到IPv6前缀${NC}"
     return 1
 }
 
@@ -4514,14 +4514,19 @@ batch_add_ipv6() {
         # 自动识别IPv6前缀
         echo
         echo -e "${CYAN}正在自动识别IPv6前缀...${NC}"
-        ipv6_prefix=$(auto_detect_ipv6_prefix "$SELECTED_INTERFACE")
         
-        if [[ -n "$ipv6_prefix" ]]; then
+        # 调用自动检测函数并获取结果
+        ipv6_prefix=$(auto_detect_ipv6_prefix "$SELECTED_INTERFACE")
+        local detect_result=$?
+        
+        if [[ $detect_result -eq 0 && -n "$ipv6_prefix" ]]; then
+            echo
             echo -e "${GREEN}✓${NC} 自动识别到IPv6前缀: ${GREEN}$ipv6_prefix${NC}"
             echo
             read -p "是否使用此前缀? (Y/n): " use_detected
             if [[ "$use_detected" =~ ^[Nn]$ ]]; then
                 echo -e "${YELLOW}请手动输入IPv6前缀${NC}"
+                echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
                 while true; do
                     read -p "IPv6前缀: " ipv6_prefix
                     if validate_ipv6_prefix "$ipv6_prefix"; then
@@ -4531,6 +4536,7 @@ batch_add_ipv6() {
                 done
             fi
         else
+            echo
             echo -e "${YELLOW}⚠${NC} 无法自动识别IPv6前缀，请手动输入"
             echo -e "${CYAN}提示: 输入前面固定不变的部分，后面的段将分别配置${NC}"
             while true; do
