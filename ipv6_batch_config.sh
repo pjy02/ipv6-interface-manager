@@ -3038,13 +3038,13 @@ check_dependencies() {
     fi
 }
 
-# 自动识别IPv6前缀
-auto_detect_ipv6_prefix() {
+# 自动识别IPv6前缀 - 仅检测不交互
+detect_ipv6_prefixes() {
     local interface=$1
     local detected_prefixes=()
     
     # 方法1: 从现有IPv6地址中提取前缀
-    echo -e "${CYAN}  → 检查现有IPv6地址...${NC}"
+    echo -e "${CYAN}  → 检查现有IPv6地址...${NC}" >&2
     local existing_ipv6s=$(ip -6 addr show "$interface" 2>/dev/null | grep -E "inet6.*scope global" | awk '{print $2}' | cut -d'/' -f1)
     
     if [[ -n "$existing_ipv6s" ]]; then
@@ -3060,7 +3060,7 @@ auto_detect_ipv6_prefix() {
     fi
     
     # 方法2: 从路由表中获取前缀信息
-    echo -e "${CYAN}  → 检查IPv6路由表...${NC}"
+    echo -e "${CYAN}  → 检查IPv6路由表...${NC}" >&2
     local route_prefixes=$(ip -6 route show dev "$interface" 2>/dev/null | grep -E "^[0-9a-f:]+" | awk '{print $1}' | grep -E "^[0-9a-f:]+::/[0-9]+$" | cut -d'/' -f1)
     
     if [[ -n "$route_prefixes" ]]; then
@@ -3076,8 +3076,7 @@ auto_detect_ipv6_prefix() {
     fi
     
     # 方法3: 从邻居发现协议获取前缀
-    echo -e "${CYAN}  → 检查路由器通告...${NC}"
-    
+    echo -e "${CYAN}  → 检查路由器通告...${NC}" >&2
     local ra_prefixes=$(ip -6 route show | grep -E "^[0-9a-f:]+::/64.*proto ra" | awk '{print $1}' | cut -d'/' -f1)
     
     if [[ -n "$ra_prefixes" ]]; then
@@ -3092,11 +3091,33 @@ auto_detect_ipv6_prefix() {
         done <<< "$ra_prefixes"
     fi
     
-    # 去重并选择最佳前缀
+    # 去重并输出结果
     if [[ ${#detected_prefixes[@]} -gt 0 ]]; then
-        # 去重
-        local unique_prefixes=($(printf '%s
-' "${detected_prefixes[@]}" | sort -u))
+        # 去重并输出到stdout
+        printf '%s
+' "${detected_prefixes[@]}" | sort -u
+        return 0
+    fi
+    
+    # 没有检测到前缀
+    return 1
+}
+
+# 自动识别IPv6前缀 - 主函数
+auto_detect_ipv6_prefix() {
+    local interface=$1
+    
+    # 调用检测函数，获取所有检测到的前缀
+    local prefixes_output
+    prefixes_output=$(detect_ipv6_prefixes "$interface" 2>&1)
+    local detect_result=$?
+    
+    if [[ $detect_result -eq 0 ]]; then
+        # 将检测到的前缀读入数组
+        local unique_prefixes=()
+        while IFS= read -r prefix; do
+            [[ -n "$prefix" ]] && unique_prefixes+=("$prefix")
+        done <<< "$prefixes_output"
         
         if [[ ${#unique_prefixes[@]} -eq 1 ]]; then
             # 只有一个前缀，直接返回
