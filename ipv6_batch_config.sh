@@ -268,8 +268,9 @@ persist_addresses() {
         mkdir -p "$PERSIST_DIR"
         file=$(persist_file_for_iface "$iface")
     fi
-    local ts
+    local ts base_gw
     ts=$(date -Iseconds)
+    base_gw="$gateway"
     if [[ $use_main -eq 1 ]]; then
         python3 - "$file" "$iface" "$ts" "$gateway" "${arr[@]}" <<'PYMAIN'
 import sys, re
@@ -294,8 +295,21 @@ for addr in addrs:
     block.append(f"    pre-up /sbin/ip -6 addr add {addr} dev {iface}")
     block.append(f"    post-down /sbin/ip -6 addr del {addr} dev {iface}")
 if gateway:
-    block.append(f"    post-up /sbin/ip -6 route replace default via {gateway} dev {iface}")
-    block.append(f"    pre-down /sbin/ip -6 route del default via {gateway} dev {iface}")
+    block.append(f"    # persisted-gateway {gateway}")
+else:
+    block.append("    # persisted-gateway auto-detect")
+detector = (
+    "    post-up /bin/sh -c 'base=\"%s\"; iface=\"%s\"; "
+    "cand=$(ip -6 neigh show dev \"$iface\" | awk \"/router/ {print $1; exit}\"); "
+    "gw=${cand:-$base}; [ -n \"$gw\" ] && /sbin/ip -6 route replace default via \"$gw\" dev \"$iface\"'"
+) % (gateway, iface)
+remover = (
+    "    pre-down /bin/sh -c 'base=\"%s\"; iface=\"%s\"; "
+    "cand=$(ip -6 neigh show dev \"$iface\" | awk \"/router/ {print $1; exit}\"); "
+    "gw=${cand:-$base}; [ -n \"$gw\" ] && /sbin/ip -6 route del default via \"$gw\" dev \"$iface\" 2>/dev/null'"
+) % (gateway, iface)
+    block.append(detector)
+    block.append(remover)
 block.append(end)
 
 def is_iface_line(line):
@@ -338,14 +352,13 @@ PYMAIN
             echo "# 重启后自动添加以下 IPv6 地址"
             echo "auto $iface"
             echo "iface $iface inet6 manual"
-            for addr in "${arr[@]}"; do
-                echo "    pre-up /sbin/ip -6 addr add $addr dev $iface"
-                echo "    post-down /sbin/ip -6 addr del $addr dev $iface"
-            done
-            if [[ -n "$gateway" ]]; then
-                echo "    post-up /sbin/ip -6 route replace default via $gateway dev $iface"
-                echo "    pre-down /sbin/ip -6 route del default via $gateway dev $iface"
-            fi
+for addr in "${arr[@]}"; do
+    echo "    pre-up /sbin/ip -6 addr add $addr dev $iface"
+    echo "    post-down /sbin/ip -6 addr del $addr dev $iface"
+done
+echo "    # persisted-gateway ${gateway:-auto-detect}"
+echo "    post-up /bin/sh -c 'base=\"$gateway\"; iface=\"$iface\"; cand=$(ip -6 neigh show dev \"$iface\" | awk \"/router/ {print $1; exit}\"); gw=${cand:-$base}; [ -n \"$gw\" ] && /sbin/ip -6 route replace default via \"$gw\" dev \"$iface\"'"
+echo "    pre-down /bin/sh -c 'base=\"$gateway\"; iface=\"$iface\"; cand=$(ip -6 neigh show dev \"$iface\" | awk \"/router/ {print $1; exit}\"); gw=${cand:-$base}; [ -n \"$gw\" ] && /sbin/ip -6 route del default via \"$gw\" dev \"$iface\" 2>/dev/null'"
         } >"$file"
     fi
     log SUCCESS "持久化配置已写入 $file"
@@ -454,6 +467,12 @@ for path in files:
         line=raw.split('#',1)[0].strip()
         if not line:
             continue
+        m=re.search(r'persisted-gateway\s+([0-9a-fA-F:]+)', raw)
+        if m:
+            last=m.group(1)
+        m=re.search(r'persisted-gateway\s+([0-9a-fA-F:]+)', line)
+        if m:
+            last=m.group(1)
         m=re.match(r'^iface\s+(\S+)\s+inet6\b', line)
         if m:
             current=m.group(1)
