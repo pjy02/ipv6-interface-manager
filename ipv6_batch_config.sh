@@ -123,6 +123,19 @@ pick_interface() {
     done
 }
 
+current_default_gateway() {
+    local iface="$1"
+    local route
+    route=$(ip -6 route show default 2>/dev/null | grep " dev $iface" | head -n1 || true)
+    [[ -z "$route" ]] && return 0
+    echo "$route" | awk '{for(i=1;i<=NF;i++) if($i=="via") {print $(i+1); exit}}'
+}
+
+detect_ipv6_gateway() {
+    local iface="$1"
+    ip -6 neigh show dev "$iface" | awk '/router/ {print $1; exit}'
+}
+
 format_ipv6() { # prefix host mask -> addr
     local prefix="$1" host="$2" mask="$3"
     printf "%s::%x/%s" "$prefix" "$host" "$mask"
@@ -252,7 +265,8 @@ ensure_interfaces_include() {
 
 persist_addresses() {
     local iface="$1"; shift; local -n arr=$1
-    ensure_interfaces_include || log WARN "继续写入 interfaces.d，但请确认主配置已包含 source" 
+    local gateway="${2:-}"
+    ensure_interfaces_include || log WARN "继续写入 interfaces.d，但请确认主配置已包含 source"
     mkdir -p "$PERSIST_DIR"
     local file
     file=$(persist_file_for_iface "$iface")
@@ -267,15 +281,21 @@ persist_addresses() {
             echo "    pre-up /sbin/ip -6 addr add $addr dev $iface"
             echo "    post-down /sbin/ip -6 addr del $addr dev $iface"
         done
+        if [[ -n "$gateway" ]]; then
+            echo "    post-up /sbin/ip -6 route replace default via $gateway dev $iface"
+            echo "    pre-down /sbin/ip -6 route del default via $gateway dev $iface"
+        fi
     } >"$file"
     log SUCCESS "持久化配置已写入 $file"
 }
 
 ask_persist() {
     local iface="$1"; shift; local -n arr=$1
+    local gw
+    gw=$(current_default_gateway "$iface")
     read -rp "是否写入 /etc/network/interfaces.d 以便重启后生效? [y/N]: " ans
     if [[ "$ans" =~ ^[Yy]$ ]]; then
-        persist_addresses "$iface" arr
+        persist_addresses "$iface" arr "$gw"
     else
         log INFO "已跳过持久化，当前地址仅对本次启动有效"
     fi
@@ -350,9 +370,42 @@ for path in files:
         if m and pending_addr:
             addrs.append(f"{pending_addr}/{m.group(1)}")
             pending_addr=None; pending_mask=None
-    
+
 print('\n'.join(dict.fromkeys(addrs)))
 PYCOL
+}
+
+collect_persistent_gateway() {
+    local iface="$1"
+    python3 - "$iface" <<'PYGW'
+import sys, glob, re
+iface=sys.argv[1]
+files=['/etc/network/interfaces']+glob.glob('/etc/network/interfaces.d/*')
+for path in files:
+    try:
+        lines=open(path).read().splitlines()
+    except OSError:
+        continue
+    current=None
+    for raw in lines:
+        line=raw.split('#',1)[0].strip()
+        if not line:
+            continue
+        m=re.match(r'^iface\s+(\S+)\s+inet6\b', line)
+        if m:
+            current=m.group(1)
+            continue
+        if current!=iface:
+            continue
+        m=re.search(r'route\s+add\s+default\s+via\s+([0-9a-fA-F:]+)', line)
+        if m:
+            print(m.group(1))
+            sys.exit(0)
+        m=re.match(r'^gateway\s+([0-9a-fA-F:]+)', line)
+        if m:
+            print(m.group(1))
+            sys.exit(0)
+PYGW
 }
 
 diagnose_ipv6() {
@@ -377,21 +430,36 @@ diagnose_ipv6() {
     fi
 
     echo "[3/5] 检查网关与路由"
-    local default_route gw
+    local default_route gw runtime_gw
+    runtime_gw=$(current_default_gateway "$iface")
     default_route=$(ip -6 route show default 2>/dev/null | grep " dev $iface" || true)
     if [[ -z "$default_route" ]]; then
-        log WARN "未找到默认 IPv6 路由"
+        log WARN "未找到默认 IPv6 路由，尝试自动检测网关..."
+        gw=$(detect_ipv6_gateway "$iface")
+        if [[ -n "$gw" ]]; then
+            log INFO "检测到网关: $gw (link-local)"
+            if ip -6 route replace default via "$gw" dev "$iface"; then
+                runtime_gw="$gw"
+                log SUCCESS "已成功添加默认路由"
+            else
+                log ERROR "自动添加默认路由失败"
+            fi
+        else
+            log ERROR "未能自动检测到 IPv6 网关"
+        fi
     else
         log SUCCESS "默认路由: $default_route"
         gw=$(echo "$default_route" | awk '{for(i=1;i<=NF;i++) if($i=="via") {print $(i+1); exit}}')
-        if [[ -n "$gw" ]]; then
-            local target="$gw"
-            [[ "$gw" == fe80::* ]] && target="$gw%$iface"
-            if ping -6 -c 2 "$target" >/dev/null 2>&1; then
-                log SUCCESS "网关可达 ($gw)"
-            else
-                log ERROR "网关不可达: $gw"
-            fi
+        runtime_gw="$gw"
+    fi
+
+    if [[ -n "$runtime_gw" ]]; then
+        local target="$runtime_gw"
+        [[ "$runtime_gw" == fe80::* ]] && target="$runtime_gw%$iface"
+        if ping -6 -c 2 "$target" >/dev/null 2>&1; then
+            log SUCCESS "网关可达 ($runtime_gw)"
+        else
+            log ERROR "网关不可达: $runtime_gw"
         fi
     fi
 
@@ -427,17 +495,49 @@ diagnose_ipv6() {
             ((found==0)) && mismatch+=("$a")
         done
         if [[ ${#mismatch[@]} -gt 0 ]]; then
-            log WARN "以下地址未写入 /etc/network/interfaces*，重启后会丢失:" 
+            log WARN "以下地址未写入 /etc/network/interfaces*，重启后会丢失:"
             for m in "${mismatch[@]}"; do echo "    $m"; done
             read -rp "是否将当前地址写入持久化配置并修复? [y/N]: " fix
             if [[ "$fix" =~ ^[Yy]$ ]]; then
-                persist_addresses "$iface" runtime_addrs
+                persist_addresses "$iface" runtime_addrs "$runtime_gw"
             else
                 log INFO "已跳过修复"
             fi
         else
             log SUCCESS "持久化配置与当前地址一致"
         fi
+    fi
+
+    local persisted_gw
+    persisted_gw=$(collect_persistent_gateway "$iface")
+    if [[ -n "$runtime_gw" && -z "$persisted_gw" ]]; then
+        log WARN "默认路由 ($runtime_gw) 未写入 /etc/network/interfaces*，重启后会丢失"
+        read -rp "是否将当前默认路由写入持久化配置? [y/N]: " route_ans
+        if [[ "$route_ans" =~ ^[Yy]$ ]]; then
+            persist_addresses "$iface" runtime_addrs "$runtime_gw"
+        else
+            log INFO "已跳过路由持久化"
+        fi
+    elif [[ -n "$runtime_gw" && -n "$persisted_gw" && "$runtime_gw" != "$persisted_gw" ]]; then
+        log WARN "持久化网关 ($persisted_gw) 与当前默认路由 ($runtime_gw) 不一致"
+        read -rp "是否更新持久化网关为 $runtime_gw ? [y/N]: " update_route
+        if [[ "$update_route" =~ ^[Yy]$ ]]; then
+            persist_addresses "$iface" runtime_addrs "$runtime_gw"
+        else
+            log INFO "已保留原有持久化网关"
+        fi
+    elif [[ -z "$runtime_gw" && -n "$persisted_gw" ]]; then
+        log WARN "配置文件包含默认路由 $persisted_gw，但当前系统未设置"
+        read -rp "是否立即添加该默认路由? [y/N]: " apply_route
+        if [[ "$apply_route" =~ ^[Yy]$ ]]; then
+            if ip -6 route replace default via "$persisted_gw" dev "$iface"; then
+                log SUCCESS "已按配置文件添加默认路由"
+            else
+                log ERROR "添加默认路由失败，请检查接口和网关"
+            fi
+        fi
+    else
+        log SUCCESS "默认路由与持久化配置一致"
     fi
 }
 
