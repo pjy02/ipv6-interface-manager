@@ -65,7 +65,18 @@ CONF
 read_conf() {
     local key="$1" section="${2:-general}" default="${3:-}"
     [[ -f "$CONFIG_FILE" ]] || { echo "$default"; return; }
-    awk -F'=' -v s="[$section]" -v k="$key" 'BEGIN{in=0} $0==s{in=1;next} /^\[/ {in=0} in && $1==k{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; found=1; exit} END{if(!found)print "'"$default"'"}' "$CONFIG_FILE"
+    awk -F'=' -v s="[$section]" -v k="$key" -v def="$default" '
+        BEGIN { ins=0; found=0 }
+        $0==s { ins=1; next }
+        /^\[/ { ins=0 }
+        ins && $1==k {
+            gsub(/^[ \t]+|[ \t]+$/, "", $2)
+            print $2
+            found=1
+            exit
+        }
+        END { if(!found) print def }
+    ' "$CONFIG_FILE"
 }
 
 write_conf() {
